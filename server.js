@@ -81,7 +81,7 @@ const submitSearch = (imgData, kind) =>
       return;
     }
     if (!searchResult.docs) {
-      resolve({ text: "Backend server error, please try again later." });
+      resolve({ text: "Error with search response. Is your query correctly formatted? Note: URL searches must be for static images, not gifs" });
       return;
     }
     if (searchResult.docs && searchResult.docs.length <= 0) {
