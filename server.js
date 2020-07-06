@@ -44,7 +44,7 @@ const welcomeHandler = (message) => {
   );
 };
 
-// Expects either a URL or an image buffer
+// Expects image buffer by default
 const submitSearch = (imgData, kind) =>
   new Promise(async (resolve, reject) => {
     let response = {};
