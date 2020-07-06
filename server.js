@@ -4,7 +4,7 @@ const fetch = require("node-fetch");
 const FormData = require("form-data");
 const redis = require("redis");
 const { promisify } = require("util");
-const isUrl = require("is-url");
+const getUrls = require("get-urls");
 
 const { SERVER_PORT, REDIS_HOST, TELEGRAM_TOKEN, TELEGRAM_WEBHOOK, TRACE_MOE_TOKEN } = process.env;
 
@@ -205,7 +205,8 @@ const limitExceeded = async (message) => {
 const privateMessageHandler = async (message) => {
   const responding_msg = message.reply_to_message ? message.reply_to_message : message;
   // First handle if the message is a URL
-  if (isUrl(responding_msg.text)) {
+  const urls = responding_msg.text ? getUrls(responding_msg.text) : []
+  if (urls.size > 0) {
     const bot_message = await bot.sendMessage(message.chat.id, "Received URL!", {
       reply_to_message_id: responding_msg.message_id,
     });
@@ -215,7 +216,7 @@ const privateMessageHandler = async (message) => {
           chat_id: bot_message.chat.id,
           message_id: bot_message.message_id,
         }),
-        submitSearch(responding_msg.text, "url"),
+        submitSearch([...urls][0], "url"),
       ]);
       // better to send responses one-by-one
       await bot.editMessageText(result.text, {
@@ -314,11 +315,51 @@ const groupMessageHandler = async (message) => {
     return;
   }
   const responding_msg = message.reply_to_message ? message.reply_to_message : message;
+  // First handle if the message is a URL
+  const urls = responding_msg.text ? getUrls(responding_msg.text) : []
+  if (urls.size > 0) {
+    const bot_message = await bot.sendMessage(message.chat.id, "Received URL!", {
+      reply_to_message_id: responding_msg.message_id,
+    });
+    try {
+      const [_, result] = await Promise.all([
+        bot.editMessageText("Searching using privided URL...", {
+          chat_id: bot_message.chat.id,
+          message_id: bot_message.message_id,
+        }),
+        submitSearch([...urls][0], "url"), // Only checks for first URL it finds
+      ]);
+      // better to send responses one-by-one
+      await bot.editMessageText(result.text, {
+        chat_id: bot_message.chat.id,
+        message_id: bot_message.message_id,
+        parse_mode: "Markdown",
+      });
+      if (result.video) {
+        const videoLink = messageIsMute(message) ? `${result.video}&mute` : result.video;
+        try {
+          await bot.sendChatAction(message.chat.id, "upload_video");
+          await bot.sendVideo(message.chat.id, videoLink);
+        } catch (error) {
+          console.log(error);
+        }
+      }
+    } catch (error) {
+      await bot.editMessageText("Server error", {
+        chat_id: bot_message.chat.id,
+        message_id: bot_message.message_id,
+      });
+      console.log(error);
+    }
+    return;
+  }
+
+  // Now handle if message is an image/gif/video
   if (!getImageFromMessage(responding_msg)) {
     // cannot find image from the message mentioning the bot
     await bot.sendMessage(
       message.chat.id,
-      "Mention me in an anime screenshot, I will tell you what anime it's from",
+      "Mention me in an anime screenshot or URL, I will tell you what anime it's from",
       { reply_to_message_id: message.message_id }
     );
     return;
