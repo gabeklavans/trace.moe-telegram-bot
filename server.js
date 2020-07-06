@@ -25,6 +25,9 @@ const bot = new TelegramBot(TELEGRAM_TOKEN, {
   polling: true,
 });
 
+const infoText =
+  "You can Send / Forward anime screenshots to me. Directly send images, gifs, videos, or URLs for staic images. No URLs for gifs or videos, please ;)";
+
 const formatTime = (timeInSeconds) => {
   const sec_num = parseInt(timeInSeconds, 10);
   const hours = Math.floor(sec_num / 3600)
@@ -38,10 +41,7 @@ const formatTime = (timeInSeconds) => {
 };
 
 const welcomeHandler = (message) => {
-  bot.sendMessage(
-    message.from.id,
-    "You can Send / Forward anime screenshots to me. I can't get images from URLs, please send the image directly to me ;)"
-  );
+  bot.sendMessage(message.from.id, infoText);
 };
 
 // Expects image buffer by default
@@ -81,7 +81,10 @@ const submitSearch = (imgData, kind) =>
       return;
     }
     if (!searchResult.docs) {
-      resolve({ text: "Error with search response. Is your query correctly formatted? Note: URL searches must be for static images, not gifs" });
+      resolve({
+        text:
+          "Error with search response. Is your query correctly formatted? Note: URL searches must be for static images, not gifs",
+      });
       return;
     }
     if (searchResult.docs && searchResult.docs.length <= 0) {
@@ -201,9 +204,10 @@ const limitExceeded = async (message) => {
 
 const privateMessageHandler = async (message) => {
   const responding_msg = message.reply_to_message ? message.reply_to_message : message;
+  // First handle if the message is a URL
   if (isUrl(responding_msg.text)) {
     const bot_message = await bot.sendMessage(message.chat.id, "Received URL!", {
-        reply_to_message_id: responding_msg.message_id,
+      reply_to_message_id: responding_msg.message_id,
     });
     try {
       const [_, result] = await Promise.all([
@@ -237,11 +241,10 @@ const privateMessageHandler = async (message) => {
     }
     return;
   }
+
+  // Now handle if message is an image/gif/video
   if (!getImageFromMessage(responding_msg)) {
-    await bot.sendMessage(
-      message.from.id,
-      "You can Send / Forward anime screenshots to me. I can't get images from URLs, please send the image directly to me ;)"
-    );
+    await bot.sendMessage(message.from.id, infoText);
     return;
   }
   if (await limitExceeded(message)) {
@@ -315,16 +318,20 @@ const groupMessageHandler = async (message) => {
     // cannot find image from the message mentioning the bot
     await bot.sendMessage(
       message.chat.id,
-      "Mention me in an anime screenshot, I will tell you what anime is that",
+      "Mention me in an anime screenshot, I will tell you what anime it's from",
       { reply_to_message_id: message.message_id }
     );
     return;
   }
 
   if (await limitExceeded(message)) {
-    await bot.sendMessage(message.chat.id, "Your search limit exceeded, please try again later", {
-      reply_to_message_id: responding_msg.message_id,
-    });
+    await bot.sendMessage(
+      message.chat.id,
+      "You exceeded the search limit, please try again later",
+      {
+        reply_to_message_id: responding_msg.message_id,
+      }
+    );
     return;
   }
 
