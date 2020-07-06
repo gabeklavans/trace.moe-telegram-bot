@@ -73,7 +73,7 @@ const submitSearch = (buffer) =>
       return;
     }
     if (searchResult.docs && searchResult.docs.length <= 0) {
-      resolve({ text: "Sorry, I don't know what anime is it :\\" });
+      resolve({ text: "Sorry, I don't know what anime it is :\\" });
       return;
     }
     const {
