@@ -4,6 +4,7 @@ const fetch = require("node-fetch");
 const FormData = require("form-data");
 const redis = require("redis");
 const { promisify } = require("util");
+const isUrl = require("is-url");
 
 const { SERVER_PORT, REDIS_HOST, TELEGRAM_TOKEN, TELEGRAM_WEBHOOK, TRACE_MOE_TOKEN } = process.env;
 
@@ -21,8 +22,7 @@ if (REDIS_HOST) {
 let bot_name = null;
 
 const bot = new TelegramBot(TELEGRAM_TOKEN, {
-  webHook: { port: SERVER_PORT },
-  polling: false,
+  polling: true,
 });
 
 const formatTime = (timeInSeconds) => {
@@ -44,18 +44,30 @@ const welcomeHandler = (message) => {
   );
 };
 
-const submitSearch = (buffer) =>
+// Expects either a URL or an image buffer
+const submitSearch = (imgData, kind) =>
   new Promise(async (resolve, reject) => {
-    const form = new FormData();
-    form.append("image", buffer, "blob");
     let response = {};
-    try {
-      response = await fetch(`https://trace.moe/api/search?token=${TRACE_MOE_TOKEN}`, {
-        body: form,
-        method: "POST",
-      });
-    } catch (error) {
-      reject(error);
+    if (kind === "url") {
+      try {
+        response = await fetch(
+          `https://trace.moe/api/search?token=${TRACE_MOE_TOKEN}&url=${imgData}`
+        );
+      } catch (error) {
+        reject(error);
+      }
+    } else {
+      // Only other kind is a file so don't bother checking kind param
+      const form = new FormData();
+      form.append("image", imgData, "blob");
+      try {
+        response = await fetch(`https://trace.moe/api/search?token=${TRACE_MOE_TOKEN}`, {
+          body: form,
+          method: "POST",
+        });
+      } catch (error) {
+        reject(error);
+      }
     }
     if (parseInt(response.headers.get("x-whatanime-quota"), 10) === 0) {
       resolve({ text: "Search quota exceeded, please try again later." });
@@ -189,6 +201,42 @@ const limitExceeded = async (message) => {
 
 const privateMessageHandler = async (message) => {
   const responding_msg = message.reply_to_message ? message.reply_to_message : message;
+  if (isUrl(responding_msg.text)) {
+    const bot_message = await bot.sendMessage(message.chat.id, "Received URL!", {
+        reply_to_message_id: responding_msg.message_id,
+    });
+    try {
+      const [_, result] = await Promise.all([
+        bot.editMessageText("Searching using privided URL...", {
+          chat_id: bot_message.chat.id,
+          message_id: bot_message.message_id,
+        }),
+        submitSearch(responding_msg.text, "url"),
+      ]);
+      // better to send responses one-by-one
+      await bot.editMessageText(result.text, {
+        chat_id: bot_message.chat.id,
+        message_id: bot_message.message_id,
+        parse_mode: "Markdown",
+      });
+      if (result.video) {
+        const videoLink = messageIsMute(message) ? `${result.video}&mute` : result.video;
+        try {
+          await bot.sendChatAction(message.chat.id, "upload_video");
+          await bot.sendVideo(message.chat.id, videoLink);
+        } catch (error) {
+          console.log(error);
+        }
+      }
+    } catch (error) {
+      await bot.editMessageText("Server error", {
+        chat_id: bot_message.chat.id,
+        message_id: bot_message.message_id,
+      });
+      console.log(error);
+    }
+    return;
+  }
   if (!getImageFromMessage(responding_msg)) {
     await bot.sendMessage(
       message.from.id,
@@ -333,8 +381,6 @@ const messageHandler = (message) => {
     groupMessageHandler(message);
   }
 };
-
-bot.setWebHook(TELEGRAM_WEBHOOK);
 
 bot.onText(/\/start/, welcomeHandler);
 
