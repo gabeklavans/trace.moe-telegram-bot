@@ -205,7 +205,7 @@ const limitExceeded = async (message) => {
 const privateMessageHandler = async (message) => {
   const responding_msg = message.reply_to_message ? message.reply_to_message : message;
   // First handle if the message is a URL
-  const urls = responding_msg.text ? getUrls(responding_msg.text) : []
+  const urls = responding_msg.text ? getUrls(responding_msg.text) : [];
   if (urls.size > 0) {
     const bot_message = await bot.sendMessage(message.chat.id, "Received URL!", {
       reply_to_message_id: responding_msg.message_id,
@@ -316,7 +316,7 @@ const groupMessageHandler = async (message) => {
   }
   const responding_msg = message.reply_to_message ? message.reply_to_message : message;
   // First handle if the message is a URL
-  const urls = responding_msg.text ? getUrls(responding_msg.text) : []
+  const urls = responding_msg.text ? getUrls(responding_msg.text) : [];
   if (urls.size > 0) {
     const bot_message = await bot.sendMessage(message.chat.id, "Received URL!", {
       reply_to_message_id: responding_msg.message_id,
